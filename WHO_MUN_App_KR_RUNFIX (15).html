@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>WHO MUN — 발언·화장실·투표 (실행 가능한 파일)</title>
+<style>
+:root{--who-blue:#1e6fb8;--bg:#f6fbff;--card:#fff;--muted:#55607a;}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",Arial;background:var(--bg);color:#07122a}
+.app{max-width:980px;margin:10px auto;padding:12px}
+.header{display:flex;gap:12px;align-items:center;margin-bottom:8px}
+.logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(180deg,var(--who-blue),#5fb0ff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900}
+.title{font-size:1.05rem;font-weight:800}
+.subtitle{color:var(--muted);font-size:0.9rem}
+.card{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(2,6,23,0.06);margin-top:12px}
+.grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:880px){.grid{grid-template-columns:1fr 380px}}
+.countries{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media(min-width:600px){.countries{grid-template-columns:repeat(3,1fr)}}
+.country{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:#fff}
+.flag{width:28px;height:20px;object-fit:cover;border:1px solid #eee;margin-right:8px}
+.controls{display:flex;gap:8px;align-items:center}
+.btn{padding:8px 10px;border-radius:8px;border:0;background:var(--who-blue);color:#fff;font-weight:700;cursor:pointer}
+.btn.ghost{background:#94a3b8;color:#000}
+.small{font-size:0.86rem;color:var(--muted)}
+.input-time{width:84px;padding:6px;border-radius:8px;border:1px solid #e6eef8;text-align:center}
+.queue-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.queue-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;border-radius:10px;border:1px solid rgba(0,0,0,0.04);background:#fff}
+.timer{font-weight:900;min-width:64px;text-align:center}
+.vote-small{padding:6px 8px;border-radius:8px;border:0;background:#e8eef6;cursor:pointer}
+.vote-small.active{background:#06b6d4;color:#000}
+.vote-counts{margin-top:8px;font-weight:800}
+.toast{position:fixed;left:10px;right:10px;bottom:12px;background:#fff;padding:10px;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.08);text-align:center;z-index:9999}
+
+/* narrow screen tweaks */
+@media(max-width:520px){
+  .countries{grid-template-columns:repeat(1,1fr)}
+  .grid{grid-template-columns:1fr}
+  .country, .queue-item{flex-direction:column;align-items:flex-start}
+  .controls{width:100%;justify-content:flex-end}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="logo">WHO</div>
+    <div>
+      <div class="title">WHO — 발언/화장실/투표 관리</div>
+      <div class="subtitle">모바일 우선 — 국기 포함 · UI는 한국어 · 국가명은 영어</div>
+    </div>
+  </header>
+
+  <main class="card grid" role="main">
+    <section>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div>
+          <strong>기본 발언 시간 (mm:ss)</strong>
+          <div class="small">새로 추가되는 대기자에게 적용됩니다.</div>
+        </div>
+        <div class="controls">
+          <input id="defaultTime" class="input-time" value="1:00" aria-label="기본 발언 시간">
+          <button id="applyDefault" class="btn btn-ghost">기본 적용</button>
+          <button id="exportBtn" class="btn btn-ghost">내보내기(JSON)</button>
+        </div>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div>
+        <strong>국가 목록</strong>
+        <div class="small">국기 옆의 발언/화장실 버튼을 사용하세요. 투표는 의장이 시작해야 활성화됩니다.</div>
+        <div id="countries" class="countries" style="margin-top:8px"></div>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div class="card">
+        <strong>투표</strong>
+        <div class="small">의장이 '투표 시작'을 누르면 각 국가 옆에 찬성/반대/기권 버튼이 표시됩니다.</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="voteStartBtn" class="btn">투표 시작</button>
+          <button id="voteEndBtn" class="btn btn-ghost">투표 종료</button>
+          <button id="voteResetBtn" class="btn btn-ghost">투표 초기화</button>
+        </div>
+        <div id="voteCounts" class="vote-counts" style="margin-top:8px">찬성: 0  반대: 0  기권: 0</div>
+      </div>
+    </section>
+
+    <aside>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong>발언 대기</strong>
+          <div class="small" id="countInfo">대기 중: 0</div>
+        </div>
+        <div class="controls">
+          <button id="nextBtn" class="btn">다음</button>
+          <button id="clearBtn" class="btn btn-ghost">초기화</button>
+        </div>
+      </div>
+
+      <div id="queueArea" class="queue-list"></div>
+
+      <div style="height:12px"></div>
+
+      <div>
+        <strong>화장실 신청 (승인 대기)</strong>
+        <div id="restPending" class="queue-list" style="margin-top:8px"></div>
+        <div style="height:8px"></div>
+        <strong>승인된 화장실</strong>
+        <div id="restApproved" class="queue-list" style="margin-top:8px"></div>
+      </div>
+    </aside>
+  </main>
+
+  <div class="small" style="text-align:center; margin-top:12px">이 파일을 <strong>index.html</strong>로 저장해 GitHub Pages에 올리면 온라인에서 동작합니다.</div>
+</div>
+
+<audio id="beepAudio"><source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg"></audio>
+
+<script>
+(() => {
+  try{
+    const COUNTRIES = [
+      {name:'Afghanistan', code:'af'}, {name:'Argentina', code:'ar'}, {name:'Australia', code:'au'},
+      {name:'Belgium', code:'be'}, {name:'Brazil', code:'br'}, {name:'Canada', code:'ca'},
+      {name:'China', code:'cn'}, {name:'Denmark', code:'dk'}, {name:'Egypt', code:'eg'},
+      {name:'Finland', code:'fi'}, {name:'France', code:'fr'}, {name:'Germany', code:'de'},
+      {name:'India', code:'in'}, {name:'Italy', code:'it'}, {name:'Japan', code:'jp'},
+      {name:'Mexico', code:'mx'}, {name:'Netherlands', code:'nl'}, {name:'Norway', code:'no'},
+      {name:'Republic of Korea', code:'kr'}, {name:'Russian Federation', code:'ru'},
+      {name:'Saudi Arabia', code:'sa'}, {name:'Singapore', code:'sg'}, {name:'Spain', code:'es'},
+      {name:'Switzerland', code:'ch'}, {name:'United Kingdom', code:'gb'}, {name:'United States of America', code:'us'}
+    ];
+
+    // State
+    let queue = []; // {id,name,code,seconds,addedISO}
+    let restPending = [];
+    let restApproved = [];
+    let voteActive = false;
+    let votes = {}; // country -> '찬성'|'반대'|'기권'
+    const STORAGE = 'who_mun_single_v3';
+    const intervals = new Map();
+    const beep = document.getElementById('beepAudio');
+
+    // DOM refs
+    const countriesEl = document.getElementById('countries');
+    const queueArea = document.getElementById('queueArea');
+    const restPendingEl = document.getElementById('restPending');
+    const restApprovedEl = document.getElementById('restApproved');
+    const defaultTimeInput = document.getElementById('defaultTime');
+    const applyDefaultBtn = document.getElementById('applyDefault');
+    const nextBtn = document.getElementById('nextBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const voteStartBtn = document.getElementById('voteStartBtn');
+    const voteEndBtn = document.getElementById('voteEndBtn');
+    const voteResetBtn = document.getElementById('voteResetBtn');
+    const voteCountsEl = document.getElementById('voteCounts');
+    const countInfo = document.getElementById('countInfo');
+
+    // utilities
+    function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+    function parseTime(str){ if(!str) return 0; const p=String(str).split(':'); if(p.length===2) return Number(p[0])*60+Number(p[1]); return Number(str)*60; }
+    function fmt(sec){ sec=Math.max(0,Math.round(sec)); const m=Math.floor(sec/60), s=sec%60; return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); }
+    function toast(msg){ const el=document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),1600); }
+    function save(){ try{ localStorage.setItem(STORAGE, JSON.stringify({queue,restPending,restApproved,voteActive,votes,defaultTime:defaultTimeInput.value})); }catch(e){console.warn(e);} }
+    function load(){ try{ const raw=localStorage.getItem(STORAGE); if(!raw) return; const obj=JSON.parse(raw); queue=obj.queue||[]; restPending=obj.restPending||[]; restApproved=obj.restApproved||[]; voteActive=!!obj.voteActive; votes=obj.votes||{}; if(obj.defaultTime) defaultTimeInput.value=obj.defaultTime; }catch(e){console.warn(e);} }
+
+    // rendering
+    function renderCountries(){
+      countriesEl.innerHTML='';
+      COUNTRIES.forEach(c=>{
+        const inQueue = queue.some(q=>q.name===c.name);
+        const inRest = restPending.some(r=>r.name===c.name) || restApproved.some(r=>r.name===c.name);
+        const div=document.createElement('div'); div.className='country';
+        let voteHtml = '';
+        if(voteActive){
+          const state = votes[c.name] || '';
+          voteHtml = `<span style="display:flex;gap:6px;align-items:center">
+            <button class="vote-small ${state==='찬성'?'active':''}" data-country="${c.name}" data-choice="찬성">찬성</button>
+            <button class="vote-small ${state==='반대'?'active':''}" data-country="${c.name}" data-choice="반대">반대</button>
+            <button class="vote-small ${state==='기권'?'active':''}" data-country="${c.name}" data-choice="기권">기권</button>
+          </span>`;
+        }
+        div.innerHTML = `<div style="display:flex;align-items:center">
+            <img class="flag" src="https://flagcdn.com/28x20/${c.code}.png" alt="flag">
+            <div style="min-width:0;margin-left:6px">${c.name}</div>
+          </div>
+          <div class="controls">
+            ${voteHtml}
+            <button ${inQueue?'disabled':''} data-action="add-queue" data-name="${c.name}" data-code="${c.code}">발언</button>
+            <button ${inRest?'disabled':''} data-action="request-rest" data-name="${c.name}" data-code="${c.code}">화장실</button>
+          </div>`;
+        countriesEl.appendChild(div);
+      });
+    }
+
+    function renderQueue(){
+      queueArea.innerHTML='';
+      countInfo.textContent = '대기 중: ' + queue.length;
+      if(queue.length===0){ queueArea.innerHTML='<div class="queue-item small">대기 중인 대표가 없습니다.</div>'; return; }
+      queue.forEach((it,idx)=>{
+        const div=document.createElement('div'); div.className='queue-item'; div.id='q-'+it.id;
+        div.innerHTML = `<div style="display:flex;align-items:center;gap:8px">
+            <img class="flag" src="https://flagcdn.com/28x20/${it.code}.png" alt="">
+            <div style="font-weight:800">${idx+1}. ${it.name}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input class="input-time" value="${fmt(it.seconds)}" data-id="${it.id}">
+            <button data-action="start" data-id="${it.id}">시작</button>
+            <button data-action="up" data-id="${it.id}">▲</button>
+            <button data-action="down" data-id="${it.id}">▼</button>
+            <button data-action="remove" data-id="${it.id}">제거</button>
+          </div>`;
+        queueArea.appendChild(div);
+      });
+    }
+
+    function renderRest(){
+      restPendingEl.innerHTML=''; restApprovedEl.innerHTML='';
+      if(restPending.length===0) restPendingEl.innerHTML='<div class="queue-item small">승인 대기 중인 신청이 없습니다.</div>';
+      restPending.forEach(r=>{
+        const div=document.createElement('div'); div.className='queue-item'; div.id='rp-'+r.id;
+        div.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><img class="flag" src="https://flagcdn.com/28x20/${r.code}.png" alt="">${r.name}</div>
+          <div style="display:flex;gap:8px"><button data-action="approve-rest" data-id="${r.id}">승인</button><button data-action="cancel-rest" data-id="${r.id}">취소</button></div>`;
+        restPendingEl.appendChild(div);
+      });
+      if(restApproved.length===0) restApprovedEl.innerHTML='<div class="queue-item small">승인된 신청이 없습니다.</div>';
+      restApproved.forEach(r=>{
+        const div=document.createElement('div'); div.className='queue-item'; div.id='ra-'+r.id;
+        div.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><img class="flag" src="https://flagcdn.com/28x20/${r.code}.png" alt="">${r.name}</div>
+          <div><button data-action="complete-rest" data-id="${r.id}">다녀옴</button></div>`;
+        restApprovedEl.appendChild(div);
+      });
+    }
+
+    // actions
+    function addQueue(name, code){
+      if(queue.some(q=>q.name===name)){ toast(name + ' 이미 대기 중입니다.'); renderCountries(); return; }
+      const secs = parseTime(defaultTimeInput.value || '1:00');
+      const item = {id:uid(), name, code, seconds:secs, addedISO: new Date().toISOString()};
+      queue.push(item); save(); renderAll(); toast(name + ' 의 발언 요청이 추가되었습니다.');
+    }
+    function removeQueue(id){ queue = queue.filter(q=>q.id!==id); stopInterval(id); save(); renderAll(); }
+    function moveUp(id){ const i=queue.findIndex(q=>q.id===id); if(i>0){ [queue[i-1],queue[i]]=[queue[i],queue[i-1]]; save(); renderAll(); } }
+    function moveDown(id){ const i=queue.findIndex(q=>q.id===id); if(i>=0 && i<queue.length-1){ [queue[i+1],queue[i]]=[queue[i],queue[i+1]]; save(); renderAll(); } }
+    function changeQueueTime(id, val){ const s=parseTime(val); const it=queue.find(q=>q.id===id); if(it){ it.seconds = s; save(); renderAll(); } }
+
+    // timers
+    function startTimerById(id){
+      const it = queue.find(q=>q.id===id);
+      if(!it) return;
+      const input = document.querySelector('#q-'+id+' input');
+      if(!input) return;
+      let total = parseTime(input.value);
+      // disable input & start button for this item
+      const startBtn = document.querySelector('#q-'+id+' [data-action="start"]');
+      if(startBtn) startBtn.disabled = true;
+      input.disabled = true;
+      stopInterval(id);
+      const iv = setInterval(()=>{
+        if(total<=0){
+          clearInterval(iv); intervals.delete(id); try{ beep.play(); }catch(e){};
+          queue = queue.filter(q=>q.id!==id);
+          save(); renderAll(); toast(it.name + ' 의 발언 시간이 종료되어 제거되었습니다.');
+          return;
+        }
+        total--;
+        const timerSpanId = 't-'+id;
+        let timerSpan = document.getElementById(timerSpanId);
+        if(!timerSpan){
+          timerSpan = document.createElement('span'); timerSpan.id = timerSpanId; timerSpan.className='timer';
+          input.after(timerSpan);
+        }
+        timerSpan.textContent = ' ' + Math.floor(total/60) + ':' + String(total%60).padStart(2,'0');
+      },1000);
+      intervals.set(id, iv);
+    }
+    function stopInterval(id){ if(intervals.has(id)){ clearInterval(intervals.get(id)); intervals.delete(id); } }
+
+    // restroom flows
+    function requestRest(name, code){
+      if(restPending.some(r=>r.name===name) || restApproved.some(r=>r.name===name)){ toast(name + ' 이미 화장실 신청 중입니다.'); return; }
+      const item = {id:uid(), name, code, timeISO: new Date().toISOString()}; restPending.push(item); save(); renderAll(); toast(name + ' 이(가) 화장실을 신청했습니다.'); }
+    function approveRest(id){ const i=restPending.findIndex(r=>r.id===id); if(i<0) return; const it=restPending.splice(i,1)[0]; it.approvedISO=new Date().toISOString(); restApproved.push(it); save(); renderAll(); toast(it.name + ' 의 화장실 신청이 승인되었습니다.'); }
+    function cancelRest(id){ restPending = restPending.filter(r=>r.id!==id); save(); renderAll(); }
+    function completeRest(id){ restApproved = restApproved.filter(r=>r.id!==id); save(); renderAll(); toast('화장실 다녀옴 처리 완료'); }
+
+    // vote
+    function startVote(){ voteActive = true; votes = {}; save(); renderAll(); toast('투표가 시작되었습니다.'); updateVoteCounts(); }
+    function endVote(){ voteActive = false; save(); renderAll(); toast('투표가 종료되었습니다.'); updateVoteCounts(); }
+    function resetVote(){ if(!confirm('투표 기록을 초기화하시겠습니까?')) return; votes={}; save(); renderAll(); updateVoteCounts(); toast('투표가 초기화되었습니다.'); }
+
+    function castVote(country, choice){
+      if(!voteActive) return;
+      votes[country] = choice; save(); renderCountries(); updateVoteCounts(); }
+
+    function updateVoteCounts(){
+      let yes=0,no=0,abst=0;
+      Object.values(votes).forEach(v=>{ if(v==='찬성') yes++; else if(v==='반대') no++; else if(v==='기권') abst++; });
+      voteCountsEl.textContent = `찬성: ${yes}  반대: ${no}  기권: ${abst}`;
+    }
+
+    // next / clear / export handlers
+    nextBtn.addEventListener('click', ()=>{ if(queue.length===0){ toast('대기열이 비어 있습니다.'); return; } const first = queue[0]; startTimerById(first.id); });
+    clearBtn.addEventListener('click', ()=>{ if(!confirm('초기화 하시겠습니까?')) return; queue=[]; restPending=[]; restApproved=[]; Array.from(intervals.keys()).forEach(k=>stopInterval(k)); save(); renderAll(); toast('초기화 완료'); });
+    exportBtn.addEventListener('click', ()=>{ const data={queue,restPending,restApproved, exportedAt:new Date().toISOString()}; const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='who_mun_export.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); });
+
+    // event delegation for dynamic elements
+    document.addEventListener('click', (e)=>{
+      const t = e.target;
+      if(!t) return;
+      // country buttons
+      if(t.dataset.action === 'add-queue'){ addQueue(t.dataset.name, t.dataset.code); return; }
+      if(t.dataset.action === 'request-rest'){ requestRest(t.dataset.name, t.dataset.code); return; }
+      // queue actions
+      if(t.dataset.action === 'start'){ startTimerById(t.dataset.id); return; }
+      if(t.dataset.action === 'remove'){ removeQueue(t.dataset.id); return; }
+      if(t.dataset.action === 'up'){ moveUp(t.dataset.id); return; }
+      if(t.dataset.action === 'down'){ moveDown(t.dataset.id); return; }
+      // rest actions
+      if(t.dataset.action === 'approve-rest'){ approveRest(t.dataset.id); return; }
+      if(t.dataset.action === 'cancel-rest'){ cancelRest(t.dataset.id); return; }
+      if(t.dataset.action === 'complete-rest'){ completeRest(t.dataset.id); return; }
+      // vote buttons (data-country & data-choice)
+      if(t.dataset.country && t.dataset.choice){ castVote(t.dataset.country, t.dataset.choice); return; }
+    });
+
+    // input change delegation for queue time edits
+    document.addEventListener('change', (e)=>{
+      const t = e.target;
+      if(t && t.matches && t.matches('.input-time') && t.dataset.id){
+        changeQueueTime(t.dataset.id, t.value);
+      }
+    });
+
+    // wire up top buttons
+    applyDefaultBtn.addEventListener('click', ()=>{ toast('기본 시간이 ' + defaultTimeInput.value + ' 으로 설정되었습니다.'); save(); });
+    document.getElementById('voteStartBtn').addEventListener('click', startVote);
+    document.getElementById('voteEndBtn').addEventListener('click', endVote);
+    document.getElementById('voteResetBtn').addEventListener('click', resetVote);
+
+    // render all
+    function renderAll(){ renderCountries(); renderQueue(); renderRest(); updateVoteCounts(); save(); }
+    function loadAndStart(){ load(); renderAll(); /* no auto-resume timers */ }
+
+    loadAndStart();
+  }catch(err){
+    console.error('초기화 오류', err);
+    document.body.innerHTML = '<pre style="white-space:pre-wrap;padding:12px">앱 초기화 중 오류가 발생했습니다. 콘솔(개발자도구)을 확인하세요.\n\n오류: '+String(err)+'</pre>';
+  }
+})();</script>
+</body>
+</html>
